@@ -1,6 +1,8 @@
 import {create} from 'zustand';
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { CompanyVentState } from '../types/vent';
+import { normalizeTopic } from '../utils/ventCategory';
+import { appendUniqueVents, prependUniqueVent } from '../utils/uniqueVents';
 
 const companyventStore=(set,get): CompanyVentState=>({
     
@@ -45,12 +47,12 @@ const companyventStore=(set,get): CompanyVentState=>({
     },
     addVents:(data)=>{
         set((state)=>({
-                companyvents:[...state.companyvents, ...data]
+                companyvents:appendUniqueVents(state.companyvents, data)
         }));
     },
     addVent:(data)=>{
         set((state)=>({
-            companyvents:[ data, ...state.companyvents]
+            companyvents:prependUniqueVent(state.companyvents, data)
         }))
     },
     upVote: (id, user_id, votedata) => {
@@ -215,7 +217,12 @@ downVote: (id, user_id, votedata) => {
 
 const useCompanyVentStore=create(persist(companyventStore,{
     name:"companyvents",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    version: 4,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<CompanyVentState>;
+        return { ...previous, scrollCategory: normalizeTopic(previous.scrollCategory) ?? '', companyvents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default useCompanyVentStore; 

@@ -6,3 +6,42 @@
     --font-arimo: "Arimo", sans-serif; 
     --font-dmsans: "DM Sans", sans-serif;
 }
+
+.Toastify__toast-container {
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    padding: 0;
+}
+
+.Toastify__toast {
+    width: max-content;
+    max-width: min(420px, calc(100vw - 24px));
+    min-height: 0;
+    margin: 0 auto 8px;
+    padding: 10px 18px;
+    border: 1px solid #4b5563;
+    border-radius: 999px;
+    background: #1f2937;
+    color: #f9fafb;
+    font-family: var(--font-arimo);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+.Toastify__toast--error {
+    border-color: #8b3b45;
+    color: #fecaca;
+}
+
+.Toastify__toast-body {
+    margin: 0;
+    padding: 0;
+}
+
+.Toastify__toast-icon,
+.Toastify__close-button,
+.Toastify__progress-bar {
+    display: none !important;
+}

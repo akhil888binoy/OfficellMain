@@ -1,25 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { VscAccount } from "react-icons/vsc";
-import { FaFireAlt } from "react-icons/fa";
 import { RiBuilding2Line } from "react-icons/ri";
 import { BiMessageDetail } from "react-icons/bi";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Bell, LogOut, Settings } from 'lucide-react';
+import { useLocation } from "react-router-dom";
+import axios from 'axios';
 
 import useVentStore from "../../store/ventStore";
 import useCompanyStore from "../../store/companyStore";
 import useUserStore from "../../store/userStore";
+import { COMPANY_NEARBY_AREA_KEY } from '../../utils/companyNearbyArea';
 import useProfileVentStore from "../../store/profileventStore";
 import useTrendingVentStore from "../../store/trendingventStore";
 import useCompanyVentStore from "../../store/companyventStore";
 
-import RefreshFeed from "../vent/RefreshFeed";
-import RefreshCompanies from "../company/RefreshCompanies";
 
 export const Sidebar = () => {
-  const navigate = useNavigate();
   const page = useLocation();
 
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const load = () => axios.get(`${import.meta.env.VITE_API}/notifications`, { withCredentials: true }).then(({ data }) => setUnread(data.unread)).catch(() => {});
+    void load();
+    const timer = window.setInterval(load, 60000);
+    const clear = () => setUnread(0);
+    window.addEventListener('officell:notifications-read', clear);
+    return () => { window.clearInterval(timer); window.removeEventListener('officell:notifications-read', clear); };
+  }, []);
   const drawerRef = useRef<HTMLDivElement | null>(null);
 
   // Close drawer when clicking outside
@@ -46,14 +56,23 @@ export const Sidebar = () => {
   const logoutCompanies = useCompanyStore((state) => state.logout);
   const resetUser = useUserStore((state) => state.reset);
 
-  const handleLogout = () => {
-    logoutVent();
-    logoutProfileVent();
-    logoutCompanyVent();
-    logoutTrendingVent();
-    logoutCompanies();
-    resetUser();
-    navigate("/");
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    setLogoutError('');
+    try {
+      await axios.post(`${import.meta.env.VITE_API}/logout`, {}, { withCredentials: true });
+      logoutVent();
+      logoutProfileVent();
+      logoutCompanyVent();
+      logoutTrendingVent();
+      logoutCompanies();
+      resetUser();
+      sessionStorage.removeItem(COMPANY_NEARBY_AREA_KEY);
+      window.location.assign('/');
+    } catch {
+      setLogoutError('Could not sign out. Please try again.');
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -109,18 +128,6 @@ export const Sidebar = () => {
               </a>
             </li>
 
-            {/* Trending */}
-            <li>
-              <a
-                href="/trending"
-                className={`flex items-center p-2 rounded-lg hover:bg-gray-700
-                ${page.pathname === "/trending" ? "bg-gray-50 text-gray-950" : "text-white"}`}
-              >
-                <FaFireAlt className="text-[22px]" />
-                <span className="ml-3 text-[18px] font-light">Trending</span>
-              </a>
-            </li>
-
             {/* Companies */}
             <li>
               <a
@@ -134,6 +141,8 @@ export const Sidebar = () => {
             </li>
 
             {/* Profile */}
+            <li><a href="/notifications" className={`flex items-center rounded-lg p-2 hover:bg-gray-700 ${page.pathname === '/notifications' ? 'bg-gray-50 text-gray-950' : 'text-white'}`}><Bell className="size-[22px]" /><span className="ml-3 text-[18px] font-light">Notifications</span>{unread > 0 && <span className="ml-auto rounded-full bg-white px-2 text-xs text-gray-950">{unread > 99 ? '99+' : unread}</span>}</a></li>
+            <li><a href="/settings" className={`flex items-center rounded-lg p-2 hover:bg-gray-700 ${page.pathname === '/settings' ? 'bg-gray-50 text-gray-950' : 'text-white'}`}><Settings className="size-[22px]" /><span className="ml-3 text-[18px] font-light">Settings</span></a></li>
             <li>
               <a
                 href="/profile"
@@ -147,23 +156,12 @@ export const Sidebar = () => {
           </ul>
 
           {/* Bottom */}
-          <div className="flex flex-col items-center space-y-7">
-            <RefreshFeed />
-            <RefreshCompanies />
-            <button
-  onClick={handleLogout}
-  className="
-    border border-white text-white 
-    px-6 py-2 text-sm                /* Mobile size */
-    sm:px-8 sm:py-3 sm:text-base     /* Tablets */
-    md:px-12 md:py-4 md:text-lg      /* Desktop */
-
-    rounded-full tracking-widest uppercase font-bold
-    hover:bg-white hover:text-black transition
-  "
->
-  Logout
-</button>
+          <div className="border-t border-gray-800 pt-3">
+            <button type="button" onClick={handleLogout} disabled={loggingOut} className="flex w-full items-center rounded-lg p-2 text-left text-white transition-colors hover:bg-gray-700 disabled:cursor-wait disabled:opacity-60">
+              <LogOut className="size-[22px] shrink-0" aria-hidden="true" />
+              <span className="ml-3 text-[18px] font-light">{loggingOut ? 'Signing out…' : 'Logout'}</span>
+            </button>
+            {logoutError && <p role="alert" className="px-2 pt-2 text-xs text-red-400">{logoutError}</p>}
           </div>
         </div>
       </aside>

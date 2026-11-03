@@ -1,6 +1,8 @@
 import {create} from 'zustand';
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { TrendingVentState } from '../types/vent';
+import { normalizeTopic } from '../utils/ventCategory';
+import { appendUniqueVents } from '../utils/uniqueVents';
 
 const trendingventStore=(set,get): TrendingVentState=>({
     scrollSkip:0,
@@ -42,12 +44,12 @@ const trendingventStore=(set,get): TrendingVentState=>({
     },
     addVents:(data)=>{
         set((state)=>({
-                trendingvents:[...state.trendingvents, ...data]
+                trendingvents:appendUniqueVents(state.trendingvents, data)
         }));
     },
     addVent:(data)=>{
         set((state)=>({
-            trendingvents:[...state.trendingvents, data]
+            trendingvents:appendUniqueVents(state.trendingvents, [data])
         }))
     },
     upVote: (id, user_id, votedata) => {
@@ -210,7 +212,12 @@ downVote: (id, user_id, votedata) => {
 
 const useTrendingVentStore=create(persist(trendingventStore,{
     name:"trendingvents",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    version: 4,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<TrendingVentState>;
+        return { ...previous, scrollCategory: normalizeTopic(previous.scrollCategory) ?? '', trendingvents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default useTrendingVentStore; 

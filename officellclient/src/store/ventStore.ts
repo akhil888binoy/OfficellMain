@@ -1,18 +1,22 @@
  import {create} from 'zustand';
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { VentState } from '../types/vent';
+import { normalizeTopic } from '../utils/ventCategory';
+import { appendUniqueVents, prependUniqueVent } from '../utils/uniqueVents';
 
 const ventStore=(set,get): VentState=>({
 
     post:"",
     company_id:"",
     category:null,
-    selectedMedia: null,
+    selectedMedia: [],
     mediaType: "",
     scrollSkip:0,
     scrollLoading : true,
     scrollLoadinMore: false,
     scrollCategory: "",
+    scrollSort: 'for-you',
+    scrollPeriod: 'week',
     scrollHasMore : true,
     scrollToItem: null,
     vents:[],
@@ -55,17 +59,17 @@ const ventStore=(set,get): VentState=>({
     },
     addVents:(data)=>{
         set((state)=>({
-                vents:[...state.vents, ...data]
+                vents:appendUniqueVents(state.vents, data)
         }));
     },
     addVent:(data)=>{
         set((state)=>({
-            vents:[data,...state.vents]
+            vents:prependUniqueVent(state.vents, data)
         }))
     },
     addTrendingVent:(data)=>{
         set((state)=>({
-            vents:[...state.vents, data]
+            vents:appendUniqueVents(state.vents, [data])
         }))
     },
     addPost:(data)=>{
@@ -221,6 +225,8 @@ downVote: (id, user_id, votedata) => {
     resetScrollCategory:()=>{
         set({
             scrollCategory: "",
+            scrollSort: 'for-you',
+            scrollPeriod: 'week',
         })
     },
     resetScrollSkip:()=>{
@@ -240,7 +246,7 @@ downVote: (id, user_id, votedata) => {
     },
     resetSelectedMedia:()=>{
         set({
-            selectedMedia: null
+            selectedMedia: []
         })
     },
     restMediaType:()=>{
@@ -274,7 +280,7 @@ downVote: (id, user_id, votedata) => {
             post:"",
             company_id:"",
             category:"",
-            selectedMedia: null,
+            selectedMedia: [],
             mediaType: "",
             scrollSkip:0,
             scrollLoading : true,
@@ -289,7 +295,13 @@ downVote: (id, user_id, votedata) => {
 
 const useVentStore=create(persist(ventStore,{
     name:"vents",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    partialize: state => ({ ...state, selectedMedia: [], mediaType: '' }),
+    version: 5,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<VentState>;
+        return { ...previous, category: normalizeTopic(previous.category), scrollCategory: normalizeTopic(previous.scrollCategory) ?? '', selectedMedia: [], vents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default useVentStore;

@@ -1,68 +1,56 @@
-import { useEffect } from "react";
-import useCompanyStore from "../../store/companyStore";
-import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { ArrowUp } from "lucide-react";
 import axios from "axios";
+import useCompanyStore from "../../store/companyStore";
 
-const RefreshCompanies = () => {
+type RefreshCompaniesProps = {
+  search: string;
+  industry: string;
+  type: string;
+  country: string | null;
+  region: string;
+  sort: string;
+  nearby?: boolean;
+  onRefresh?: () => void;
+};
 
-        const refreshButton = useCompanyStore((state)=> state.refreshButton);
-        const setRefreshButton = useCompanyStore((state)=> state.setRefreshButton);
-        const companies = useCompanyStore((state) => state.companies);
-        const refreshCompanies = useCompanyStore((state)=> state.logout);
-        const {pathname} = useLocation();
+const RefreshCompanies = ({ search, industry, type, country, region, sort, nearby = false, onRefresh }: RefreshCompaniesProps) => {
+  const companies = useCompanyStore(state => state.companies);
+  const newestId = Math.max(0, ...companies.map(company => Number(company.id) || 0));
+  const [newCount, setNewCount] = useState(0);
 
-        const fetchDbCompanies = async()=>{
-            try {
-            const lastCreatedAt = companies.sort((a,b)=> a.createdAt > b.createdAt ? -1: 1)[0];
-            const {data: response } = await axios.get(`${import.meta.env.VITE_API}/companies/count?lastcreatedAt=${lastCreatedAt.createdAt}`,{
-                withCredentials: true
-            });
-            if (response.count_companies > 10){
-                setRefreshButton(true)
-            }else {
-                    setRefreshButton(false);
-                }
-            } catch (error) {
-                console.error(error);
-            }
-        }
-        const handleRefresh = ()=>{
-            refreshCompanies();
-            setRefreshButton(false);
-                        }
-                useEffect(() => {
-                const interval = setInterval(() => {
-                    if (companies.length > 0) {
-                    fetchDbCompanies();
-                    }
-                }, 50000);
+  useEffect(() => {
+    setNewCount(0);
+    if (!newestId) return;
+    let active = true;
+    const checkForNewCompanies = async () => {
+      try {
+        const params = new URLSearchParams({ skip: '0', company_name: search, industry, type, searchcountry: country ?? '', region, sort, ...(nearby ? { nearby: '1' } : {}) });
+        const { data } = await axios.get(`${import.meta.env.VITE_API}/companies?${params}`, { withCredentials: true });
+        if (active) setNewCount((data.companies ?? []).filter(company => Number(company.id) > newestId).length);
+      } catch (error) {
+        if (active) console.error(error);
+      }
+    };
+    void checkForNewCompanies();
+    const interval = setInterval(checkForNewCompanies, 50000);
+    return () => { active = false; clearInterval(interval); };
+  }, [newestId, search, industry, type, country, region, sort, nearby]);
 
-                return () => clearInterval(interval);
-                    // eslint-disable-next-line react-hooks/exhaustive-deps
-                }, []);
+  if (!newCount) return null;
 
-    return (
-    <>
-        {refreshButton && pathname === "/companies" && (
-                            <button
-                onClick={handleRefresh}
-                className="
-                    border border-white text-white 
-                    px-6 py-2 text-sm                     /* Mobile */
-                    sm:px-8 sm:py-2.5 sm:text-base        /* Tablet */
-                    md:px-10 md:py-3 md:text-base         /* Laptop/Desktop */
+  const showNewCompanies = () => {
+    setNewCount(0);
+    useCompanyStore.setState({ companies: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false, scrollToItem: null, refreshButton: false });
+    onRefresh?.();
+  };
 
-                    rounded-full tracking-widest uppercase font-semibold
-                    hover:bg-white hover:text-black transition
-                "
-                >
-                New Companies
-                </button>
-        )}
-    </>
+  return <div className="flex justify-center border-b border-gray-800 bg-gray-950 px-4 py-3">
+    <button type="button" onClick={showNewCompanies} className="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-800">
+      <ArrowUp className="size-4" aria-hidden="true" />
+      Show new companies
+    </button>
+  </div>;
+};
 
-    );
-
-}
-
-export default RefreshCompanies
+export default RefreshCompanies;

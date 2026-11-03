@@ -7,38 +7,46 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { getName } from "country-list";
 import useVentStore from "../../store/ventStore";
-import { useLocation } from "react-router-dom";
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import useTrendingVentStore from "../../store/trendingventStore";
 import useProfileVentStore from "../../store/profileventStore";
 import useCompanyVentStore from "../../store/companyventStore";
-import type { VentCardProps } from "../../types/vent";
+import type { Vent, VentCardProps, Vote } from "../../types/vent";
+
+const withVote = (vent: Vent, ventId: string, serverVote: Vote): Vent => {
+  if (String(vent.id) !== String(ventId)) return vent;
+  const votes = vent.votes ?? [];
+  const voterId = Number(serverVote.user_id);
+  const previous = votes.find(vote => Number(vote.user_id) === voterId)?.vote ?? 'NOVOTE';
+  const next = serverVote.vote;
+  return {
+    ...vent,
+    upvote: Math.max(0, Number(vent.upvote) + Number(next === 'UPVOTE') - Number(previous === 'UPVOTE')),
+    downvote: Math.max(0, Number(vent.downvote) + Number(next === 'DOWNVOTE') - Number(previous === 'DOWNVOTE')),
+    votes: [...votes.filter(vote => Number(vote.user_id) !== voterId), { ...serverVote, user_id: String(serverVote.user_id) }],
+  };
+};
 
 interface VentCardComponentProps extends VentCardProps{
   ref?: Ref<HTMLDivElement>;
+  timeline?: boolean;
 }
 
-export const VentCard = forwardRef<HTMLDivElement, VentCardComponentProps>(({ id , category , content , upvote , downvote , company_name , company_country, author, author_id, commentcount , createdAt, media, votes, user_id }, ref) => {
+export const VentCard = forwardRef<HTMLDivElement, VentCardComponentProps>(({ id , company_id, category , content , upvote , downvote , company_name , company_country, location_label, author, author_id, commentcount , createdAt, media, votes, user_id, timeline = false }, ref) => {
 
   const [time, setTime] = useState("");
   const [isupvote , setIsUpVote] = useState(false);
   const [isdownvote , setIsDownVote] = useState(false);
   const [disableSubmitBtn, setDisableSubmitBtn] = useState(false);
-  const upVote = useVentStore((state)=> state.upVote);
-  const upVoteTrending = useTrendingVentStore((state)=> state.upVote);
-  const upVoteProfile = useProfileVentStore((state)=> state.upVote);
-  const upVoteCompany = useCompanyVentStore((state)=> state.upVote);
-  const downVote = useVentStore((state)=> state.downVote);
-  const downVoteTrending = useTrendingVentStore((state)=> state.downVote);
-  const downVoteProfile = useProfileVentStore((state)=> state.downVote);
-  const downVoteCompany = useCompanyVentStore((state)=> state.downVote);
   const deleteVent = useVentStore((state)=>state.deleteVent);
   const deleteTrendingVent = useTrendingVentStore((state)=> state.deleteVent);
   const deleteProfileVent = useProfileVentStore((state)=> state.deleteVent);
   const deleteCompanyVent = useCompanyVentStore((state)=> state.deleteVent);
   const [open , setOpen] = useState(false);
   const page = useLocation();
+  const isDetailPage = page.pathname === `/vent/${id}`;
+  const navigate = useNavigate();
   const [deletingComment, setDeletingComment] = useState(false);
 
 const cleanCountryName = (name: string | undefined) => {
@@ -49,108 +57,59 @@ const cleanCountryName = (name: string | undefined) => {
     .trim(); 
 };
 
-  useEffect(()=>{
-    if (votes?.length > 0 ){
-      for (const vote of votes){
-        if(vote.user_id == user_id && vote.vote=='UPVOTE'){
-          setIsUpVote(true)
-        } else if (vote.user_id == user_id && vote.vote=='DOWNVOTE'){
-          setIsDownVote(true)
-        }
-      }
-    }
-         // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  useEffect(() => {
+    const current = votes?.find(vote => Number(vote.user_id) === Number(user_id))?.vote;
+    setIsUpVote(current === 'UPVOTE');
+    setIsDownVote(current === 'DOWNVOTE');
+  }, [votes, user_id]);
+
+  const syncVote = (vote: Vote) => {
+    useVentStore.setState(state => ({ vents: state.vents.map(vent => withVote(vent, id, vote)) }));
+    useTrendingVentStore.setState(state => ({ trendingvents: state.trendingvents.map(vent => withVote(vent, id, vote)) }));
+    useProfileVentStore.setState(state => ({ profilevents: state.profilevents.map(vent => withVote(vent, id, vote)) }));
+    useCompanyVentStore.setState(state => ({ companyvents: state.companyvents.map(vent => withVote(vent, id, vote)) }));
+    setIsUpVote(vote.vote === 'UPVOTE');
+    setIsDownVote(vote.vote === 'DOWNVOTE');
+  };
+
+  const voteErrorMessage = (error: unknown) => {
+    if (axios.isAxiosError(error) && error.response?.status === 404) return 'This post is no longer available. Refresh the feed.';
+    if (axios.isAxiosError(error) && !error.response) return 'Could not reach the server. Check your connection and try again.';
+    return 'Could not save your vote. Please try again.';
+  };
 
 const handleDownvote=async ()=>{
   try {
-      setDisableSubmitBtn(true)
-      
-      let voteenum;
-      const vote = votes.find((vote)=> vote.user_id === user_id);
-        if(vote){
-          if(vote.vote === 'NOVOTE' || vote.vote === 'UPVOTE'){
-            voteenum = 'DOWNVOTE';
-            setIsDownVote(true);
-            setIsUpVote(false);
-          }else if (vote.vote ==='DOWNVOTE'){
-            voteenum = 'NOVOTE';
-            setIsDownVote(false);
-            setIsUpVote(false);
-          }
-        }else{
-          voteenum = 'DOWNVOTE';
-          setIsDownVote(true);
-          setIsUpVote(false);
-        }
-        downVote(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        downVoteProfile(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        downVoteTrending(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        downVoteCompany(id , user_id, { vent_id: id, user_id, vote: voteenum });
-      await axios.post(`${import.meta.env.VITE_API}/vents/${id}/downvote`,"",{
-          withCredentials: true
-      });
-
-    setDisableSubmitBtn(false)
+    setDisableSubmitBtn(true);
+    const { data } = await axios.post(`${import.meta.env.VITE_API}/vents/${id}/downvote`, {}, { withCredentials: true });
+    syncVote(data.vote);
   } catch (error) {
     console.error(error);
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      navigate('/sessionexpired');
+      return;
+    }
+    toast.error(voteErrorMessage(error));
+  } finally {
     setDisableSubmitBtn(false);
-    toast.error('Oops Failed to Down Vote! Dont worry its a mistake from our side ', {
-              position: "top-right",
-              autoClose: 5000,
-              hideProgressBar: false,
-              closeOnClick: false,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "dark",
-        });
   }
 
 }
 
   const handleUpvote= async ()=>{
     try {
-        setDisableSubmitBtn(true);
-        let voteenum;
-        const vote = votes.find((vote)=> vote.user_id === user_id);
-        if(vote){
-          if(vote.vote === 'NOVOTE' || vote.vote === 'DOWNVOTE'){
-            voteenum = 'UPVOTE';
-            setIsUpVote(true)
-            setIsDownVote(false)
-          }else if (vote.vote ==='UPVOTE'){
-            voteenum = 'NOVOTE';
-            setIsUpVote(false)
-            setIsDownVote(false)
-          }
-        }else{
-          voteenum = 'UPVOTE';
-          setIsUpVote(true);
-          setIsDownVote(false);
-        }
-       
-        upVote(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        upVoteProfile(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        upVoteTrending(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        upVoteCompany(id , user_id, { vent_id: id, user_id, vote: voteenum });
-        await axios.post(`${import.meta.env.VITE_API}/vents/${id}/upvote`,"",{
-            withCredentials: true
-        });
-        setDisableSubmitBtn(false);
+      setDisableSubmitBtn(true);
+      const { data } = await axios.post(`${import.meta.env.VITE_API}/vents/${id}/upvote`, {}, { withCredentials: true });
+      syncVote(data.vote);
     } catch (error) {
       console.error(error);
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        navigate('/sessionexpired');
+        return;
+      }
+      toast.error(voteErrorMessage(error));
+    } finally {
       setDisableSubmitBtn(false);
-      toast.error('Oops Failed to Up Vote! Dont worry its a mistake from our side ', {
-                position: "top-right",
-                autoClose: 5000,
-                hideProgressBar: false,
-                closeOnClick: false,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-                theme: "dark",
-          });
     }
 
   }
@@ -168,30 +127,12 @@ const handleDeleteVent =async()=>{
     deleteCompanyVent(id);
     setDisableSubmitBtn(false);
     setOpen(false);
-    toast.success('Deleted Successfully 💀', {
-          position: "top-right",
-          autoClose: 5000,
-          hideProgressBar: false,
-          closeOnClick: false,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "dark",
-        });
+    toast.success('Post deleted.');
     
   } catch (error) {
     console.error(error);
     setDisableSubmitBtn(false);
-    toast.error('Oops Failed to Delete! Dont worry its a mistake from our side ', {
-              position: "top-right",
-              autoClose: 5000,
-              hideProgressBar: false,
-              closeOnClick: false,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "dark",
-        });
+    toast.error('Could not delete the post. Try again.');
     }finally{
       setDeletingComment(false);
     }
@@ -199,79 +140,60 @@ const handleDeleteVent =async()=>{
 
 useEffect(() => {
   if (createdAt) {
-    setTime(moment.utc(createdAt).local().startOf("seconds").fromNow());
+    setTime(`Week of ${moment.utc(createdAt).format('MMM D, YYYY')}`);
   }
 }, [createdAt]);
 
   return (
     <>
     { id &&
-    <div className="relative flex flex-col bg-gray-950 border-t border-b border-gray-700 w-full overflow-hidden" ref={ref}>
-      <a href={`/vent/${id}`} >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3">
-          {/* User + Time */}
-          <div className="flex items-center gap-2">
-            <div>
-              <h3 className="text-white font-semibold text-sm md:text-baseclea">
-                {author}
-              </h3>
-              <span className="text-xs text-gray-400">{time}</span>
-            </div>
+    <article className={timeline ? "relative w-full cursor-pointer border-b border-gray-800 bg-gray-950 transition-colors hover:bg-gray-900/40" : "relative flex w-full cursor-pointer flex-col overflow-hidden border-y border-gray-700 bg-gray-950"} ref={ref} onClick={event => {
+      if (page.pathname === `/vent/${id}` || (event.target as HTMLElement).closest("a, button, video, input, textarea")) return;
+      navigate(`/vent/${id}`);
+    }}>
+      {timeline && <div aria-hidden="true" className="absolute left-4 top-4 flex size-11 items-center justify-center rounded-full bg-gray-800 text-gray-300"><RiBuilding2Line className="text-xl" /></div>}
+        {timeline ? <div className="min-w-0 pb-2 pl-[4.5rem] pr-4 pt-4 sm:pl-[4.75rem]">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <h3 className="max-w-full truncate text-[15px] font-medium text-white">{company_id ? <Link to={`/companies/${company_id}`} className="hover:underline">{company_name || 'Company'}</Link> : company_name || 'Company'}</h3>
+            <span className="text-sm text-gray-500">· {time}</span>
           </div>
-        
-          {/* Company + Location */}
-          <div className="flex flex-col items-end text-xs text-gray-300 lg:gap-2 gap-1">
-            <div className="flex items-center gap-1 flex-wrap justify-end">
-              <span className="text-right  break-words max-w-[140px] md:max-w-[180px]">
-                {company_name}
-              </span>
-                    <RiBuilding2Line className="text-blue-400 flex-shrink-0" />
-            </div>
-            <div className="flex items-center gap-1 flex-wrap justify-end">
-              <span className="text-right break-words max-w-[140px] md:max-w-[180px]">
-  {cleanCountryName(getName(company_country || ''))}
-              </span>
-              <MdLocationOn className="text-red-400 flex-shrink-0" />
-            </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-400">
+            <span>{author || 'Anonymous'}</span>
+            {location_label && <span className="inline-flex items-center gap-0.5"><MdLocationOn aria-hidden="true" />{location_label}</span>}
+            {company_country && getName(company_country) && <span className="inline-flex items-center gap-0.5"><MdLocationOn aria-hidden="true" />{cleanCountryName(getName(company_country))}</span>}
           </div>
-        </div>
-      </a>
+        </div> : <div className="flex items-center justify-between px-4 py-3">
+          <div><h3 className="text-sm font-semibold text-white">{author}</h3><span className="text-xs text-gray-400">{time}</span></div>
+          <div className="flex flex-col items-end gap-1 text-xs text-gray-300">
+            <div className="flex items-center gap-1">{company_id ? <Link to={`/companies/${company_id}`} className="max-w-[180px] break-words text-right hover:underline">{company_name}</Link> : <span className="max-w-[180px] break-words text-right">{company_name}</span>}<RiBuilding2Line className="shrink-0 text-blue-400" /></div>
+            {company_country && getName(company_country) && <div className="flex items-center gap-1"><span>{cleanCountryName(getName(company_country))}</span><MdLocationOn className="shrink-0 text-red-400" /></div>}
+            {location_label && <div className="flex items-center gap-1"><span>{location_label}</span><MdLocationOn className="shrink-0 text-red-400" /></div>}
+          </div>
+        </div>}
 
       {/* Confession Text */}
-      <div className="px-4 pb-3">
-        <div className="mb-2">
-
-        <span className="inline-block px-1.5 py-0.5 text-[10px] font-medium rounded bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
-          {category}
-        </span>
-
-        </div>
-        <p className="text-gray-200 leading-relaxed text-sm md:text-base lg:text-sm ">
-          {content}
-        </p>
-        <div className="mt-3 flex flex-wrap justify-center items-center gap-3">
-        {media?.map((item) => (
-          <div key={item.id} className="relative group">
+      <div className={timeline ? "pb-3 pl-[4.5rem] pr-4 sm:pl-[4.75rem]" : "px-4 pb-3"}>
+        {!timeline && <span className="mb-2 inline-block rounded bg-gradient-to-r from-purple-600 to-indigo-600 px-1.5 py-0.5 text-[10px] font-medium text-white">{category}</span>}
+        <Link to={`/vent/${id}`} className="block">
+          <p className={timeline ? "whitespace-pre-wrap break-words text-[15px] leading-6 text-gray-200" : "text-sm leading-relaxed text-gray-200 md:text-base lg:text-sm"}>
+            {content}
+          </p>
+        </Link>
+        {timeline && <span className="mt-3 inline-block rounded-full border border-gray-700 px-2.5 py-1 text-xs text-gray-400">{category}</span>}
+        {media?.length > 0 && <div className={`mt-3 grid gap-1.5 overflow-hidden rounded-xl ${media.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {media?.map((item, index) => (
+          <div key={item.id} className={`relative min-w-0 overflow-hidden ${media.length === 3 && index === 2 ? 'col-span-2' : ''}`}>
             {item.type === "IMAGE" && (
               <img
                 src={item.url}
-                alt="Post content"
-                className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 hover:shadow-lg"
-                style={{
-                  maxHeight: media.length === 1 ? '480px' : '320px',
-                  minHeight: '160px'
-                }}
+                alt={media.length === 1 ? 'Post photo' : `Post photo ${index + 1}`}
+                className={media.length === 1 ? 'max-h-[480px] w-full bg-gray-900 object-contain' : media.length === 3 && index === 2 ? 'aspect-[2/1] w-full object-cover' : 'aspect-square w-full object-cover'}
               />
             )}
             {item.type === "VIDEO" && (
               <video
                 controls
-                className="max-w-full rounded-lg shadow-md transition-transform duration-300 hover:shadow-lg"
-                style={{
-                  maxHeight: media.length === 1 ? '480px' : '320px',
-                  minHeight: '160px'
-                }}
+                className="max-h-[480px] w-full"
               >
                 <source src={item.url} type="video/mp4" />
                 Your browser does not support the video tag.
@@ -279,27 +201,24 @@ useEffect(() => {
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
       </div>
 
       {/* Footer (Upvote / Downvote / Comments / Delete) */}
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-6">
+      <div className={timeline ? "flex items-center justify-between pb-4 pl-[4.5rem] pr-4 pt-1 sm:pl-[4.75rem]" : "flex items-center justify-between px-4 py-3"}>
+        <div className={timeline ? isDetailPage ? "flex items-center gap-7" : "flex w-full max-w-sm items-center justify-between gap-3" : "flex items-center gap-6"}>
           {/* UpVote Button */}
             <button
               onClick={() => {
                 if (disableSubmitBtn) {
-                  toast.warning('Please wait… Dont spam the button', {
-                    position: "top-right",
-                    autoClose: 3000,
-                    theme: "dark",
-                  });
+                  toast.warning('Please wait for your vote to save.');
                   return;
                 }
                 handleUpvote();
               }}
-              className={`flex items-center gap-2 transition 
+              aria-label={`Upvote, ${upvote} votes`}
+              className={`flex items-center gap-2 transition ${timeline ? 'rounded-full p-1 text-sm' : ''}
                 ${disableSubmitBtn ? 'cursor-not-allowed opacity-50' : 'hover:text-green-400 active:text-green-400'} 
                 ${isupvote ? 'text-green-400' : 'text-gray-400'}`}
             >
@@ -311,16 +230,13 @@ useEffect(() => {
               <button
                 onClick={() => {
                   if (disableSubmitBtn) {
-                    toast.warning("Please wait… Dont spam the button", {
-                      position: "top-right",
-                      autoClose: 3000,
-                      theme: "dark",
-                    });
+                    toast.warning('Please wait for your vote to save.');
                     return;
                   }
                   handleDownvote();
                 }}
-                className={`flex items-center gap-2 transition 
+                aria-label={`Downvote, ${downvote} votes`}
+                className={`flex items-center gap-2 transition ${timeline ? 'rounded-full p-1 text-sm' : ''}
                   ${disableSubmitBtn ? "cursor-not-allowed opacity-50" : "hover:text-red-400 active:text-red-400"} 
                   ${isdownvote ? "text-red-400" : "text-gray-400"}`}
               >
@@ -329,81 +245,25 @@ useEffect(() => {
               </button>
         {/* Comment */}
         {page.pathname != `/vent/${id}` && 
-            <button 
-                className="flex items-center gap-2 text-gray-400 hover:text-blue-400 active:text-blue-400 transition"
-              > <a href={`/vent/${id}`} >
-                <FaRegComment />
-                </a>
-                <span className="text-sm md:text-base">{commentcount}</span>
-              </button>
+            <Link to={`/vent/${id}`} aria-label={`${commentcount || 0} comments`} className={timeline ? "flex items-center gap-2 rounded-full p-1 text-sm text-gray-400 transition hover:text-blue-400" : "flex items-center gap-2 text-gray-400 transition hover:text-blue-400"}>
+              <FaRegComment /><span>{commentcount || 0}</span>
+            </Link>
           }
           
         </div>
       { author_id === user_id && page.pathname != `/vent/${id}`&&
         <button 
                 onClick={() => setOpen(true)}
-                disabled={disableSubmitBtn}  className="flex items-center gap-2 text-gray-400 hover:text-red-400 active:text-red-600 transition">
+                disabled={disableSubmitBtn} aria-label="Delete post" className={`${timeline ? 'ml-3 ' : ''}flex items-center gap-2 text-gray-400 transition hover:text-red-400 active:text-red-600`}>
           <FaTrash />
         </button>
       }
       
-    <Dialog open={open} onClose={setOpen} className="relative z-10">
-        <DialogBackdrop
-          transition
-          className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in"
-        />
-
-        <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <DialogPanel
-              transition
-              className="relative transform overflow-hidden rounded-lg bg-gray-950 text-left shadow-xl outline -outline-offset-1 outline-white/10 transition-all data-closed:translate-y-4 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in sm:my-8 sm:w-full sm:max-w-lg data-closed:sm:translate-y-0 data-closed:sm:scale-95"
-            >
-              <div className="bg-gray-950 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-red-500/10 sm:mx-0 sm:size-10">
-                    <ExclamationTriangleIcon aria-hidden="true" className="size-6 text-red-400" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <DialogTitle as="h3" className="text-base font-semibold text-white">
-                      Delete this Confession
-                    </DialogTitle>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-400">
-                        Are you sure you want to delete this confession ?
-                        This action cannot be undone.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-950 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-
-                <button
-                  type="button"
-                  onClick={handleDeleteVent}
-                  className="inline-flex w-full justify-center rounded-md bg-red-500 px-3 py-2 text-sm font-semibold text-white hover:bg-red-400 sm:ml-3 sm:w-auto"
-                >
-                {deletingComment ? "Deleting..." : "Delete"}
-                </button>
-                
-                <button
-                  type="button"
-                  data-autofocus
-                  onClick={() => setOpen(false)}
-                  className="mt-3 inline-flex w-full justify-center rounded-md bg-white/10 px-3 py-2 text-sm font-semibold text-white inset-ring inset-ring-white/5 hover:bg-white/20 sm:mt-0 sm:w-auto"
-                >
-                  Cancel
-                </button>
-              </div>
-            </DialogPanel>
-          </div>
-        </div>
-      </Dialog>
+    <ConfirmDialog open={open} title="Delete post?" description="This post and its comments will be removed. This cannot be undone." deleting={deletingComment} onClose={() => setOpen(false)} onDelete={handleDeleteVent} />
 
 
       </div>
-    </div> 
+    </article>
     }
     </>
   );

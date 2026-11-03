@@ -1,69 +1,60 @@
-import { FaGlobe, FaMapMarkerAlt } from "react-icons/fa";
-import {getName} from "country-list";
-import { cleanCountryName, cleanDomain } from "../../utils/cleanerText";
+import { Check } from 'lucide-react';
+import { RiBuilding2Line } from 'react-icons/ri';
+import { cleanDomain } from '../../utils/cleanerText';
+import { countryName } from '../../utils/countryName';
 
-interface CompanySearchCardProps {
-  company_id: string;
-  city: string;
-  country: string;
+type CompanySearchCardProps = {
+  type?: 'LOCAL' | 'MNC';
+  isRemote?: boolean;
+  city: string | null;
+  region?: string | null;
+  country: string | null;
   company_name: string;
-  industry: string;
-  domain: string;
-}
-
+  industry: string | null;
+  domain: string | null;
+  logoUrl?: string | null;
+  selected: boolean;
+  onSelect: () => void;
+};
 
 export const CompanySearchCard = ({
-  company_id,
+  type,
+  isRemote,
   city,
+  region,
   country,
   company_name,
   industry,
   domain,
-}: CompanySearchCardProps) =>  {
+  logoUrl,
+  selected,
+  onSelect,
+}: CompanySearchCardProps) => {
+  const place = type === 'MNC'
+    ? 'Multiple countries'
+    : isRemote
+      ? `Remote${country ? ` · ${countryName(country)}` : ''}`
+      : [city, region, country ? countryName(country) : null].filter(Boolean).join(', ');
 
   return (
-     <>
-    {company_id &&
-     <div className="relative flex flex-col bg-gray-950 w-full overflow-hidden 
-rounded-xl p-3 gap-2 border border-gray-800 hover:border-gray-600 transition">
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3">
-         <h3 className="text-white font-dmsans font-semibold text-sm sm:text-base">
-            {company_name}
-        </h3>
-        {/* Category Badge */}
-          <span className="  px-2 py-0.5 text-[10px] sm:text-xs tracking-[1px] font-dmsans rounded-full bg-blue-500/20 text-blue-400 border border-blue-400/30">
-          {industry}
-        </span>
-      </div>
-
-      {/* Body */}
-      <div className="px-4 pb-3 flex flex-col gap-2">
-        <div className="flex items-center gap-1 text-gray-400 text-[11px] sm:text-xs ">
-          <FaMapMarkerAlt className="text-red-400" />
-              <span>
-                {city}, {cleanCountryName(getName(country) ?? "")}
-              </span>
-        </div>
-        {domain && (
-                        <div className="flex items-center gap-1 text-gray-400 text-[11px] sm:text-xs ">
-                          <FaGlobe className="text-green-400" />
-                          <a
-                            data-testid="website-link"
-                            onClick={(e) => e.stopPropagation()}
-                            href={domain}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-green-300 transition-colors"
-                          >
-                            {cleanDomain(domain)}
-                          </a>
-                        </div>
-            )}
-      </div>
-
-    </div>}
-    </>
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white ${selected ? 'bg-gray-900' : 'hover:bg-gray-900/70'}`}
+    >
+      <span className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-800 text-gray-400">
+        <RiBuilding2Line className="size-5" aria-hidden="true" />
+        {logoUrl && <img src={logoUrl} alt="" loading="lazy" referrerPolicy="no-referrer" onError={event => { event.currentTarget.style.display = 'none'; }} className="absolute inset-0 size-full bg-white object-contain p-1" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-white">{company_name}</span>
+        <span className="mt-0.5 block truncate text-xs text-gray-400">{[place, industry].filter(Boolean).join(' · ')}</span>
+        {domain && <span className="mt-0.5 block truncate text-xs text-gray-500">{cleanDomain(domain)}</span>}
+      </span>
+      <span className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-white bg-white text-gray-950' : 'border-gray-600 text-transparent'}`} aria-hidden="true">
+        <Check className="size-3" />
+      </span>
+    </button>
   );
 };

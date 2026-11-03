@@ -1,11 +1,10 @@
 import { useParams } from "react-router-dom";
 import { CommentSection } from "../components/comment/CommentSection";
-import { Sidebar } from "../components/common/Sidebar";
+import { TimelineShell } from "../components/common/TimelineShell";
 import { VentCard } from "../components/vent/VentCard";
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { CommentCard } from "../components/comment/CommentCard";
-import { UserCard } from "../components/user/UserCard";
 import useUserStore from "../store/userStore";
 import useVentStore from "../store/ventStore";
 import useCommentStore from "../store/commentStore";
@@ -15,6 +14,7 @@ import useProfileVentStore from "../store/profileventStore";
 import useCompanyVentStore from "../store/companyventStore";
 import useTrendingVentStore from "../store/trendingventStore";
 import type { Vent } from "../types/vent";
+import { ventLocationLabel } from '../utils/ventLocationLabel';
 
 
 
@@ -28,7 +28,6 @@ export const VentDetailsPage = () => {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [interact , setInteract] = useState(false);
-  const location = useUserStore((state) => state.location);
   const user = useUserStore((state) => state.user);
   const addComments = useCommentStore((state)=>state.addComments);
   const [vent , setVent] = useState<Vent | null>(null);
@@ -36,6 +35,7 @@ export const VentDetailsPage = () => {
   const profileVent = useProfileVentStore((state)=> state.getVent(id || ""));
   const companyVent = useCompanyVentStore((state)=> state.getVent(id || ""));
   const trendingVent = useTrendingVentStore((state)=>state.getVent(id || ""));
+  const [fetchedVent, setFetchedVent] = useState<Vent | null>(null);
   const comments = useCommentStore((state)=>state.comments);
   const resetComments = useCommentStore((state)=>state.resetComments);
 
@@ -46,10 +46,20 @@ export const VentDetailsPage = () => {
     profileVent ||
     companyVent ||
     trendingVent ||
+    fetchedVent ||
     null; 
     setVent(selectedVent);
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id,interact]);
+  }, [id,interact,fetchedVent]);
+
+  useEffect(() => {
+    if (!id || feedVent || profileVent || companyVent || trendingVent) return;
+    const controller = new AbortController();
+    axios.get(`${import.meta.env.VITE_API}/vents/${id}`, { withCredentials: true, signal: controller.signal })
+      .then(({ data }) => setFetchedVent(data.vent ?? null))
+      .catch(error => { if (!axios.isCancel(error)) console.error(error); });
+    return () => controller.abort();
+  }, [id, feedVent, profileVent, companyVent, trendingVent]);
 
   useEffect(()=>{
       resetComments();
@@ -105,25 +115,20 @@ export const VentDetailsPage = () => {
   }
 
   return (
-    <div className="w-screen h-screen flex bg-gray-950">
-      {/* Sidebar */}
-    <div className="border-r-1  border-gray-700  " >
-      <Sidebar/>
-      </div>
-      {/* Main Content */}
-        <div className="flex-1 flex flex-row transition-all duration-300 sm:ml-64">
-        <div className="flex-1 bg-gray-950 overflow-y-scroll " onScroll={handleScroll} >
+    <TimelineShell title="Post" subtitle="A workplace story" onScroll={handleScroll} aside={<div className="rounded-2xl bg-gray-900 px-5 py-5 text-sm leading-6 text-gray-400"><h2 className="mb-2 text-base font-medium text-gray-100">Protect your identity</h2>Your username is public on new posts and replies. Avoid details that could identify someone in a small team.</div>}>
         { vent &&
                     <span onClick={()=>{
                       setInteract(!interact);
                     }}>
-                      <VentCard
+                      <VentCard timeline
                           id={vent.id}
+                          company_id={vent.company_id ?? vent.company?.id}
                           category= {vent.category}
                           content = {vent.content}
                           upvote={vent.upvote}
                           downvote={vent.downvote}
                           company_country={vent.company?.country}
+                          location_label={ventLocationLabel(vent)}
                           company_name={vent.company?.name}
                           author={vent.author?.username}
                           author_id = {vent.author_id}
@@ -136,7 +141,8 @@ export const VentDetailsPage = () => {
                     </span>
                     
         }
-          <div className="space-y-4 ">
+          <div>
+          {vent && <h2 className="border-b border-gray-800 px-5 py-3 text-sm font-medium text-gray-300">Comments</h2>}
           {vent &&  <CommentSection vent_id ={vent.id}></CommentSection> }
               {loading && !vent && 
                <div className="flex justify-center items-center py-10 w-full">
@@ -200,11 +206,6 @@ export const VentDetailsPage = () => {
                                         </div>
                               )}
           </div>
-        </div>
-        <div className="bg-gray-950 w-80 h-screen hidden border-l border-gray-700 lg:block p-4 ">
-              <UserCard username={user.username} location={location.city} />
-        </div>
-      </div>
-    </div>
+    </TimelineShell>
   );
 };

@@ -57,7 +57,9 @@ const commentStore=(set,get)=>({
 
 const useCommentStore = create(persist(commentStore,{
     name:"comments",
-    storage:createJSONStorage(()=>sessionStorage)
+    storage:createJSONStorage(()=>sessionStorage),
+    version: 2,
+    migrate: () => ({ comments: [] }),
 }));
 
 export default useCommentStore;

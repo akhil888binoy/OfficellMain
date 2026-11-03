@@ -1,111 +1,105 @@
-import { useState } from "react";
-import { FaUser } from "react-icons/fa";
-import { CheckCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from 'react';
+import { Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import useUserStore from '../store/userStore';
 
 export default function AddUsernamePage() {
-
-  const [username, setUsername] = useState("");
-  const [step, setStep] = useState(2); 
+  const currentUsername = useUserStore(state => state.user.username);
+  const [username, setUsername] = useState(currentUsername || '');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const trimmedUsername = username.trim();
+  const validUsername = /^[A-Za-z0-9_]{5,15}$/.test(trimmedUsername);
 
-  const handleNext = async () => {
-    if (username.trim()) {
+  const saveUsername = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!validUsername || saving) return;
 
-      setStep(3);
-      await axios.post(`${import.meta.env.VITE_API}/add-username`, {
-        new_username: username
-      },{
-          withCredentials: true
-      });
-      setTimeout(() => {
-        navigate("/feed");
-      }, 1200);
-
+    setSaving(true);
+    setError('');
+    try {
+      const { data } = await axios.post(`${import.meta.env.VITE_API}/add-username`, {
+        new_username: trimmedUsername,
+      }, { withCredentials: true });
+      useUserStore.setState({ user: data.user });
+      setSaved(true);
+      window.setTimeout(() => navigate('/feed'), 1000);
+    } catch (requestError) {
+      if (axios.isAxiosError(requestError) && requestError.response?.status === 409) {
+        setError('That username is already taken. Try another.');
+      } else {
+        setError('Could not save your username. Please try again.');
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-950 text-white p-6">
-      {/* Stepper */}
-      <div className="flex items-center justify-center w-full max-w-xl mb-10">
-        {/* Step 1 */}
-        <div className="flex flex-col items-center flex-1">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-500">
-            <CheckCircle className="w-6 h-6 text-white" />
-          </div>
-          <p className="mt-2 text-sm">LinkedIn</p>
+    <main className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-12 text-white sm:px-6">
+      <div className="w-full max-w-md">
+        <div className="mb-7 text-center">
+          <span className="font-arimo text-3xl font-bold tracking-tight text-white">⟢ OFFICELL</span>
         </div>
-        <div className="flex-1 h-1 bg-green-500" />
 
-        {/* Step 2 */}
-        <div className="flex flex-col items-center flex-1">
-          <div
-            className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 2 ? "bg-blue-500" : " bg-green-500"
-            }`}
-          >
-            <FaUser className="w-5 h-5 text-white" />
-          </div>
-          <p className="mt-2 text-sm">Username</p>
-        </div>
-        <div className={`flex-1 h-1 ${step === 3 ? "bg-green-500" : "bg-gray-700"}`} />
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6 sm:p-8">
+          {saved ? (
+            <div className="py-4 text-center" role="status">
+              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-gray-800 text-white">
+                <Check size={22} aria-hidden="true" />
+              </span>
+              <h1 className="mt-5 text-xl font-semibold text-white">Username saved</h1>
+              <p className="mt-2 text-sm text-gray-400">You’ll post as <span className="font-medium text-white">@{trimmedUsername}</span>.</p>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-xl font-semibold text-white">{currentUsername ? 'Change your username' : 'Choose a username'}</h1>
+              <p className="mt-2 text-sm leading-6 text-gray-400">This name appears on new posts and replies. Choose one that doesn’t identify you.</p>
 
-        {/* Step 3 */}
-        <div className="flex flex-col items-center flex-1">
-          <div
-            className={`flex items-center justify-center w-10 h-10 rounded-full ${
-              step === 3 ? "bg-green-500" : "bg-gray-700"
-            }`}
-          >
-            <CheckCircle className="w-6 h-6 text-white" />
-          </div>
-          <p className="mt-2 text-sm">Done</p>
+              <form className="mt-7" onSubmit={saveUsername}>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-200">Username</label>
+                <div className="mt-2 flex items-center rounded-xl border border-gray-700 bg-gray-950 px-4 focus-within:border-gray-400 focus-within:ring-1 focus-within:ring-gray-400">
+                  <span className="select-none text-lg text-gray-500" aria-hidden="true">@</span>
+                  <input
+                    id="username"
+                    type="text"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={username}
+                    onChange={event => { setUsername(event.target.value); setError(''); }}
+                    placeholder="yourname"
+                    maxLength={15}
+                    pattern="[A-Za-z0-9_]{5,15}"
+                    aria-describedby="username-hint"
+                    aria-invalid={Boolean(error)}
+                    className="w-full bg-transparent px-2 py-3 text-base text-white outline-none placeholder:text-gray-600"
+                  />
+                </div>
+                <p id="username-hint" className="mt-2 text-xs text-gray-400">5–15 letters, numbers, or underscores.</p>
+                {error && <p role="alert" className="mt-3 text-sm text-red-400">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={!validUsername || saving}
+                  className="mt-7 w-full rounded-full bg-white px-4 py-3 text-sm font-semibold text-gray-950 transition-colors hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
+                >
+                  {saving ? 'Saving…' : currentUsername ? 'Save username' : 'Continue to feed'}
+                </button>
+              </form>
+            </>
+          )}
         </div>
+
+        {currentUsername && !saved && (
+          <button type="button" onClick={() => navigate('/feed')} className="mx-auto mt-5 block text-sm text-gray-400 transition-colors hover:text-white">
+            Back to feed
+          </button>
+        )}
       </div>
-
-      {/* Username Form */}
-      {step === 2 && (
-  <div className="w-full max-w-md bg-gray-950 p-6 shadow-lg">
-    <h2 className="text-xl font-semibold mb-4">Choose your username</h2>
-
-    <input
-      type="text"
-      value={username}
-      onChange={(e) => setUsername(e.target.value)}
-      placeholder="Enter your username"
-      className="w-full p-3 rounded-lg bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-    />
-
-    {username.length > 0 && username.length < 5 && (
-      <p className="text-red-500 text-sm mt-2">
-        Username must be at least 5 characters long.
-      </p>
-    )}
-
-    <button
-      onClick={handleNext}
-      disabled={username.trim().length < 5}
-      className={`mt-4 w-full py-3 rounded-lg text-sm font-semibold transition ${
-        username.trim().length >= 5
-          ? "bg-blue-500 hover:bg-blue-600 text-white"
-          : "bg-gray-700 text-gray-400 cursor-not-allowed"
-      }`}
-    >
-      Continue
-    </button>
-  </div>
-)}
-
-      {step === 3 && (
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-green-400 tracking-tighter" >🎉 All Done !</h2>
-          <p className="mt-2 text-gray-400 font-arimo">
-            Your username <span className="text-white font-semibold">{username}</span> has been saved.
-          </p>
-        </div>
-      )}
-    </div>
+    </main>
   );
 }

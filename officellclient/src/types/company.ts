@@ -2,14 +2,23 @@
 export interface Company {
   id: string;
   name: string;
+  type?: 'LOCAL' | 'MNC';
+  description?: string | null;
+  isRemote?: boolean;
   industry: string;
-  city: string;
-  country: string;
-  domain: string;
+  city: string | null;
+  region?: string | null;
+  country: string | null;
+  domain: string | null;
+  logoUrl?: string | null;
   _count?: {
     vents: number;
+    locations?: number;
   };
+  locations?: Array<{ id: number; city: string | null; country: string }>;
   createdAt: string;
+  latestStoryWeek?: string | null;
+  discoveryScope?: 'nearby' | 'same-country';
 }
 
 export interface ReactSelectOption {

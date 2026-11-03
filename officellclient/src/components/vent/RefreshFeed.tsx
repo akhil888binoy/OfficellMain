@@ -1,77 +1,45 @@
-import { useEffect } from "react";
-import useVentStore from "../../store/ventStore";
-import useTrendingVentStore from "../../store/trendingventStore";
-import useCompanyVentStore from "../../store/companyventStore";
-import useProfileVentStore from "../../store/profileventStore";
+import { useEffect, useState } from "react";
+import { ArrowUp } from "lucide-react";
 import axios from "axios";
-import { useLocation } from "react-router-dom";
+import useVentStore from "../../store/ventStore";
 
-const RefreshFeed = () => {
+const RefreshFeed = ({ category, sort, onRefresh }: { category: string; sort: string; onRefresh?: () => void }) => {
+  const vents = useVentStore(state => state.vents);
+  const newestId = Math.max(0, ...vents.map(vent => Number(vent.id) || 0));
+  const [newCount, setNewCount] = useState(0);
 
-        const refreshButton = useVentStore((state)=> state.refreshButton);
-        const setRefreshButton = useVentStore((state)=> state.setRefreshButton);
-        const vents = useVentStore((state) => state.vents);
-        const refreshTrending = useTrendingVentStore((state)=> state.logout);
-        const refreshFeed= useVentStore((state)=> state.logout);
-        const refreshCompany = useCompanyVentStore((state)=> state.logout);
-        const refreshProfile = useProfileVentStore((state)=> state.logout);
-        const {pathname} = useLocation();
+  useEffect(() => {
+    setNewCount(0);
+    if (!newestId || sort !== "new") return;
+    let active = true;
+    const checkForNewPosts = async () => {
+      try {
+        const params = new URLSearchParams({ skip: "0", category, sort: "new" });
+        const { data } = await axios.get(`${import.meta.env.VITE_API}/vents?${params}`, { withCredentials: true });
+        if (active) setNewCount((data.vents ?? []).filter(vent => Number(vent.id) > newestId).length);
+      } catch (error) {
+        if (active) console.error(error);
+      }
+    };
+    void checkForNewPosts();
+    const interval = setInterval(checkForNewPosts, 50000);
+    return () => { active = false; clearInterval(interval); };
+  }, [newestId, category, sort]);
 
-        const fetchDbVents = async()=>{
-            try {
-            
-            const lastCreatedAt = vents.sort((a , b  )=> a.createdAt > b.createdAt ? -1: 1)[0];
-            const {data: response } = await axios.get(`${import.meta.env.VITE_API}/vents/count?lastcreatedAt=${lastCreatedAt.createdAt}`,{
-                withCredentials: true
-            });
-            if (response.count_vents > 10){
-                setRefreshButton(true)
-            }else{
-                setRefreshButton(false);
-            }
-            } catch (error) {
-                console.error(error);
-            }
-        }
+  if (!newCount) return null;
 
-        const handleRefresh = ()=>{
-            refreshTrending();
-            refreshFeed();
-            refreshProfile();
-            refreshCompany();
-            setRefreshButton(false);
-        }
+  const showNewPosts = () => {
+    setNewCount(0);
+    useVentStore.setState({ vents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false, scrollToItem: null, refreshButton: false });
+    onRefresh?.();
+  };
 
-    useEffect(()=>{
-        const interval= setInterval(() => {
-            if (vents.length > 0){
-                fetchDbVents();
-            }
-        }, 50000);
-        return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    },[]);
-    
-    return (
-        <>
-            { refreshButton && pathname != "/companies" &&
-               <button
-                onClick={handleRefresh}
-                className="
-                    border border-white text-white 
-                    px-6 py-2 text-sm                     /* Mobile */
-                    sm:px-8 sm:py-2.5 sm:text-base        /* Tablet */
-                    md:px-10 md:py-3 md:text-base         /* Laptop/Desktop */
+  return <div className="flex justify-center border-b border-gray-800 bg-gray-950 px-4 py-3">
+    <button type="button" onClick={showNewPosts} className="inline-flex items-center gap-2 rounded-full border border-gray-700 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-100 transition-colors hover:bg-gray-800">
+      <ArrowUp className="size-4" aria-hidden="true" />
+      Show new posts
+    </button>
+  </div>;
+};
 
-                    rounded-full tracking-widest uppercase font-semibold
-                    hover:bg-white hover:text-black transition
-                "
-                >
-                    New Feeds
-                </button>
-            }
-            </>
-        )
-}
-
-export default RefreshFeed
+export default RefreshFeed;

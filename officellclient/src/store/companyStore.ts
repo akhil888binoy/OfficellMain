@@ -112,7 +112,12 @@ const companyStore=(set,get): CompanyState=>({
 
 const useCompanyStore=create(persist(companyStore,{
     name:"companies",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    version: 2,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<CompanyState>;
+        return { ...previous, companies: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default useCompanyStore;

@@ -12,6 +12,7 @@ import { PAGE_SIZE } from "../utils/pagesize";
 import useCompanyStore from "../store/companyStore";
 import useCompanyVentStore from "../store/companyventStore";
 import useProfileVentStore from "../store/profileventStore";
+import { ventLocationLabel } from '../utils/ventLocationLabel';
 
 export const TrendingPage = () => {
 
@@ -146,11 +147,13 @@ useEffect(() => {
                         <span key={index} onClick={()=> addScrollToItem(index) }>
                           <VentCard
                             id={vent.id}
+                            company_id={vent.company_id ?? vent.company?.id}
                             category= {vent.category}
                             content = {vent.content}
                             upvote={vent.upvote}
                             downvote={vent.downvote}
                             company_country={vent.company?.country}
+                            location_label={ventLocationLabel(vent)}
                             company_name={vent.company?.name}
                             author={vent.author?.username}
                             author_id = {vent.author_id}
@@ -192,7 +195,7 @@ useEffect(() => {
         </div>
         {/* Filters & Categories (desktop only) */}
         <div className="bg-gray-950 w-80 h-screen hidden border-l border-gray-700 lg:block p-4 ">
-          <UserCard username={user.username} location={location.city} />
+          <UserCard username={user.username} location={location?.city ?? ""} />
         </div>
       </div>
     </div>

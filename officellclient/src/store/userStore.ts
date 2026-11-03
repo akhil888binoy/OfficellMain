@@ -11,14 +11,14 @@ const userStore=(set)=>({
     },
     addUser:(data)=>{
         set(({
-            user: data.user,
-            location:data.location
+            user: data?.user ?? { username: "", id: "" },
+            location: { city: data?.location?.city ?? "" }
         }))
     },
     reset:()=>{
         set({
-            user:{},
-            location:{}
+            user:{ username: "", id: "" },
+            location:{ city: "" }
         })
     }
 })

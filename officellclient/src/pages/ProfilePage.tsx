@@ -1,8 +1,6 @@
-import {CategoryBar} from "../components/common/CategoryBar";
-import { CategoryBarM } from "../components/common/mobile/CategoryBarM";
+import { TimelineShell } from "../components/common/TimelineShell";
+import { TopicAside, TopicFilters } from "../components/common/TopicFilters";
 import PostCard from "../components/vent/PostCard";
-import { Sidebar } from "../components/common/Sidebar";
-import { UserCard } from "../components/user/UserCard";
 import { VentCard } from "../components/vent/VentCard";
 import { useEffect, useRef, useState } from "react";
 import axios from "axios";
@@ -15,6 +13,7 @@ import useTrendingVentStore from "../store/trendingventStore";
 import useCompanyStore from "../store/companyStore";
 import useCompanyVentStore from "../store/companyventStore";
 import useVentStore from "../store/ventStore";
+import { ventLocationLabel } from '../utils/ventLocationLabel';
 
 export const ProfilePage = () => {
 
@@ -26,15 +25,13 @@ export const ProfilePage = () => {
   const loading = useProfileVentStore((state)=> state.scrollLoading);
   const category = useProfileVentStore((state)=> state.scrollCategory);
   const hasMore = useProfileVentStore((state)=> state.scrollHasMore);
-  const location = useUserStore((state) => state.location)
   const user = useUserStore((state) => state.user);
+  const addUser = useUserStore((state) => state.addUser);
   const addVents = useProfileVentStore((state) => state.addVents);
-  const reset = useProfileVentStore((state)=>state.reset);
   const vents = useProfileVentStore((state) => state.profilevents);
   const addScrollSkip = useProfileVentStore((state)=> state.addScrollSkip);
   const addloading = useProfileVentStore((state)=> state.addScrollLoading);
   const addloadingMore = useProfileVentStore((state)=> state.addScrollLoadingMore);
-  const addcategory = useProfileVentStore((state)=> state.addScrollCategory);
   const addHasMore = useProfileVentStore((state)=> state.addHasMore);
   const addScrollToItem = useProfileVentStore((state)=> state.addScrollToItem);
   const resetScrollToItemTrending = useTrendingVentStore((state)=> state.resetScrollToItem);
@@ -43,6 +40,11 @@ export const ProfilePage = () => {
   const resetScrollToItemFeed = useVentStore((state)=> state.resetScrollToItem);
   const logoutTrendingVents = useTrendingVentStore((state)=> state.logout);
   const refreshButton = useVentStore((state)=> state.refreshButton);
+
+  const selectCategory = (value: string) => {
+    if (value === category) return;
+    useProfileVentStore.setState({ profilevents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false, scrollCategory: value, scrollToItem: null });
+  };
 
   useEffect(()=>{
     logoutTrendingVents();
@@ -55,6 +57,14 @@ export const ProfilePage = () => {
       }
        // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    axios.get(`${import.meta.env.VITE_API}/profile`, { withCredentials: true, signal: controller.signal })
+      .then(({ data }) => addUser(data))
+      .catch(error => { if (!axios.isCancel(error)) console.error(error); });
+    return () => controller.abort();
+  }, [addUser]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -109,7 +119,7 @@ export const ProfilePage = () => {
       };
     }
      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, category,refreshButton]);
+  }, [skip, category, refreshButton, user.id]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
   const target = e.currentTarget; // safer than e.target
@@ -122,32 +132,9 @@ export const ProfilePage = () => {
 };
 
   return (
-    <div className="w-screen h-screen flex bg-gray-950">
-      {/* Sidebar */}
-      <div className="h-screen  border-r-1 border-gray-700  " >
-      <Sidebar></Sidebar>
-      <CategoryBarM
-        category={category}
-        onSelect={(q)=>{
-            addScrollSkip(0);
-            addHasMore(true);
-            reset();
-            addcategory(q)
-          }}
-          ></CategoryBarM>
-      </div>
-      {/* Main Content */}
-      <div className="flex-1 flex flex-row transition-all duration-300 sm:ml-64">
-        {/* Feeds */}
-        <div className="flex-1 bg-gray-950 overflow-y-scroll  " onScroll={handleScroll}>
-            <PostCard />
-            <div className="border-t border-gray-700">
-              <UserCard username={user.username} location={location.city} />
-            </div>
-          
-                <h3 className=" tracking-[1px] lg:text-lg  font-dmsans  text-gray-100  lg:pt-3 lg:px-3 lg:pb-3 pt-2 px-2 pb-2">
-                    Confessions
-                </h3>
+    <TimelineShell title={user.username || "Profile"} prominentTitle subtitle="Your stories and activity" onScroll={handleScroll} headerContent={<TopicFilters category={category} onSelect={selectCategory} />} aside={<TopicAside category={category} onSelect={selectCategory} />}>
+            <PostCard timeline />
+            <h3 className="border-b border-gray-800 px-5 py-3 text-sm font-medium text-gray-300">Your posts</h3>
               {loading && vents.length === 0 && 
                                           <div className="flex justify-center items-center py-10 w-full">
                     <Shuffle
@@ -166,9 +153,7 @@ export const ProfilePage = () => {
                   </div>
                         }
               {!loading && vents.length === 0 && (
-                <div className="text-center text-gray-500 py-6">
-                  Come on! spill something
-                </div>
+                <div className="text-center text-gray-500 py-6">Come on! spill something</div>
               )}
                             {/* Error message */}
                                     {error && (
@@ -178,14 +163,16 @@ export const ProfilePage = () => {
                                     )}
                                      {/* Companies list */}
                                       {vents.map((vent,index) => (
-                                            <span key={index} onClick={()=> addScrollToItem(index) }>
-                                              <VentCard
+                                            <div key={vent.id} onClick={()=> addScrollToItem(index) }>
+                                              <VentCard timeline
                                                 id={vent.id}
+                                                company_id={vent.company_id ?? vent.company?.id}
                                                 category= {vent.category}
                                                 content = {vent.content}
                                                 upvote={vent.upvote}
                                                 downvote={vent.downvote}
                                                 company_country={vent.company?.country}
+                                                location_label={ventLocationLabel(vent)}
                                                 company_name={vent.company?.name}
                                                 author={vent.author?.username}
                                                 author_id = {vent.author_id}
@@ -196,7 +183,7 @@ export const ProfilePage = () => {
                                                 user_id = {user.id}
                                                 ref={index === scrollToCard ?  scrollToRef : null}
                                             />     
-                                          </span>
+                                            </div>
                                       ))}
                                      {/* Loading more indicator */}
                                     {loadingMore && 
@@ -220,25 +207,10 @@ export const ProfilePage = () => {
                                      {/* End of results message */}
                                     {!hasMore && vents.length > 0 && (
                                       <div className="text-center text-gray-400 py-6 flex justify-center items-center space-x-2">
-                                                                <FaSkullCrossbones />
-                                                                <span>THE END</span>
-                                        </div>
+                                        <FaSkullCrossbones />
+                                        <span>THE END</span>
+                                      </div>
                                     )}
-        </div>
-        {/* Filters & Categories (desktop only) */}
-        <div className="bg-gray-950 w-80 h-screen hidden border-l border-gray-700 lg:block p-4 ">
-          <UserCard username={user.username} location={location.city} />
-          <CategoryBar
-            category={category}
-            onSelect={(q)=>{
-            addScrollSkip(0);
-            addHasMore(true);
-            reset();
-            addcategory(q)
-          }}  
-          ></CategoryBar>
-        </div>
-      </div>
-    </div>
+    </TimelineShell>
   );
 };

@@ -1,6 +1,7 @@
 import {create} from 'zustand';
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { PostCompanyState } from '../types/vent';
+import { normalizeTopic } from '../utils/ventCategory';
 
 const postcompanyStore=(set,get):PostCompanyState=>({
 
@@ -111,7 +112,12 @@ const postcompanyStore=(set,get):PostCompanyState=>({
 
 const usePostCompanyStore=create(persist(postcompanyStore,{
     name:"postcompanies",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    version: 2,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<PostCompanyState>;
+        return { ...previous, scrollCategory: normalizeTopic(previous.scrollCategory) ?? '', companies: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default usePostCompanyStore;

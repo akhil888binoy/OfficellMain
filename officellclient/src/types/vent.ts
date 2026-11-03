@@ -14,10 +14,15 @@ export interface Media {
 export interface Company {
   id: string;
   name: string;
+  type?: 'LOCAL' | 'MNC';
+  description?: string | null;
+  isRemote?: boolean;
   country: string;
   industry: string ;
   domain: string;
+  logoUrl?: string | null;
   city: string;
+  region?: string | null;
 }
 
 export interface Author {
@@ -27,11 +32,14 @@ export interface Author {
 
 export interface Vent {
   id: string;
+  company_id?: string | number;
   category: string;
   content: string;
   upvote: number;
   downvote: number;
   company?: Company;
+  location_id?: number | null;
+  location?: { id: number; city: string | null; country: string } | null;
   company_name?: string;
   company_country?: string;
   author?: Author;
@@ -77,12 +85,14 @@ export interface ProfileVentState {
 
 export interface VentCardProps {
   id: string;
+  company_id?: string | number;
   category: string;
   content: string;
   upvote: number;
   downvote: number;
   company_name?: string;
   company_country?: string;
+  location_label?: string;
   author?: string;
   author_id: string;
   commentcount?: number;
@@ -126,12 +136,14 @@ export interface VentState {
   post: string;
   company_id: string;
   category: string | null;
-  selectedMedia: File | null;
+  selectedMedia: File[];
   mediaType: string;
   scrollSkip: number;
   scrollLoading: boolean;
   scrollLoadinMore: boolean;
   scrollCategory: string;
+  scrollSort: 'for-you' | 'new' | 'hot' | 'top';
+  scrollPeriod: 'today' | 'week' | 'month' | 'all';
   scrollHasMore: boolean;
   scrollToItem: number | null;
   vents: Vent[];
@@ -149,7 +161,7 @@ export interface VentState {
   addPost: (data: string) => void;
   addCategory: (data: string | null) => void;
   addCompany_id: (data: string) => void;
-  addSelectedMedia: (data: File | null) => void;
+  addSelectedMedia: (data: File[]) => void;
   addMediaType: (data: string) => void;
   upVote: (id: string, user_id: string, votedata: Vote) => void;
   downVote: (id: string, user_id: string, votedata: Vote) => void;

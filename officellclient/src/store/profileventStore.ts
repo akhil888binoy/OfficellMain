@@ -2,6 +2,8 @@
 import {create} from 'zustand';
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { ProfileVentState } from '../types/vent';
+import { normalizeTopic } from '../utils/ventCategory';
+import { appendUniqueVents, prependUniqueVent } from '../utils/uniqueVents';
 
 const profileventStore=(set,get): ProfileVentState=>({
     
@@ -44,12 +46,12 @@ const profileventStore=(set,get): ProfileVentState=>({
     },
     addVents:(data)=>{
         set((state)=>({
-                profilevents:[...state.profilevents, ...data]
+                profilevents:appendUniqueVents(state.profilevents, data)
         }));
     },
     addVent:(data)=>{
         set((state)=>({
-            profilevents:[ data, ...state.profilevents]
+            profilevents:prependUniqueVent(state.profilevents, data)
         }))
     },
     upVote: (id, user_id, votedata) => {
@@ -214,7 +216,12 @@ downVote: (id, user_id, votedata) => {
 
 const useProfileVentStore=create(persist(profileventStore,{
     name:"profilevents",
-    storage: createJSONStorage(()=>sessionStorage)
+    storage: createJSONStorage(()=>sessionStorage),
+    version: 4,
+    migrate: (persisted) => {
+        const previous = persisted as Partial<ProfileVentState>;
+        return { ...previous, scrollCategory: normalizeTopic(previous.scrollCategory) ?? '', profilevents: [], scrollSkip: 0, scrollHasMore: true, scrollLoading: true, scrollLoadinMore: false };
+    },
 }));
 
 export default useProfileVentStore;
